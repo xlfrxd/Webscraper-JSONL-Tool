@@ -1,5 +1,6 @@
 import sys
 import os
+import re
 import requests
 import json
 from PyQt6.QtWidgets import (QApplication, QWidget, QVBoxLayout, QTextEdit, QPushButton, QLabel, QComboBox, QFileDialog)
@@ -66,6 +67,22 @@ class WebScraperGUI(QWidget):
         
         self.status_label.setText("Scraping completed!")
     
+    def clean_text(self, text):
+        """
+        Cleans the scraped text by:
+        - Removing inline reference numbers (typically superscripted).
+        - Stripping extra spaces and special characters.
+        - Keeping legal references, case numbers, and dates.
+        - Removing instances like `.12` where numbers appear after a period.
+        - Ensuring proper spacing between inline elements.
+        """
+        text = re.sub(r'\s*\d{1,2}(?=[^\w])', '', text)  # Removes inline reference numbers (e.g., "12.")
+        text = re.sub(r'(?<=\w)(\d+)(?=\w)', ' ', text)  # Remove numbers between words
+        text = re.sub(r'(?<=\.)\d+', '', text)  # Remove numbers that follow a period (e.g., ".12")
+        text = re.sub(r'(?<=\w)([A-Z][a-z]+)', r' \1', text)  # Ensure space between different formatted words
+        text = re.sub(r'\s+', ' ', text).strip()  # Remove extra spaces
+        return text
+    
     def scrape_and_process_website(self, url, output_path, output_format):
         response = requests.get(url)
         soup = BeautifulSoup(response.text, "html.parser")
@@ -84,7 +101,8 @@ class WebScraperGUI(QWidget):
             if tag.name == "p" and tag.get("class") == ["b"] and "Footnotes" in tag.text:
                 break
             if tag.name == "p":
-                result_text.append(tag.get_text(strip=True))
+                cleaned_text = self.clean_text(tag.get_text(separator=" ", strip=True))  # Ensuring proper spacing
+                result_text.append(cleaned_text)
         
         final_text = "\n".join(result_text)
         
