@@ -1,62 +1,107 @@
+import sys
 import os
 import requests
-from bs4 import BeautifulSoup
 import json
+from PyQt6.QtWidgets import (QApplication, QWidget, QVBoxLayout, QTextEdit, QPushButton, QLabel, QComboBox, QFileDialog)
+from bs4 import BeautifulSoup
 
-# File path with folder structure
-folder_path = "output/"
-
-def scrape_and_process_website(url, output_format="jsonl"):
-    # Step 1a: Fetch the webpage content
-    response = requests.get(url)
-    soup = BeautifulSoup(response.text, "html.parser")
-
-    # Step 1b: Get the Case Number for the file name
-    case_num = soup.find("title").get_text().replace('.', '').replace(' ', '_').lower()
-    filename = case_num
-
-    # Step 1c: Create the subfolders
-    file_path = os.path.join(folder_path+output_format,filename)  
-    os.makedirs(folder_path + output_format, exist_ok=True)
+class WebScraperGUI(QWidget):
+    def __init__(self):
+        super().__init__()
+        self.initUI()
     
-    # Step 2a: Remove all superscripts
-    for tag in soup.find_all('a', class_='nt'):
-        tag.insert_after(' ')  # Insert a space before the tag
-        tag.decompose()  # Removes the tag from the tree
-
-    # Step 2b: Extract relevant content
-    result_text = []
-    for tag in soup.find_all():
-        # Stop at the <p class="b">Footnotes</p> section
-        if tag.name == "p" and tag.get("class") == ["b"] and "Footnotes" in tag.text:
-            break
-        # Collect text if it's not inside the "Footnotes" section
-        if tag.name == "p":
-            result_text.append(tag.get_text(strip=True))
-
-    # Combine the extracted text
-    final_text = "\n".join(result_text)
-
-    # Step 3: Preprocess the content
-    if output_format == "txt":
+    def initUI(self):
+        self.setWindowTitle("Web Scraper")
+        self.setGeometry(100, 100, 500, 400)
         
-        with open(file_path + ".txt", "w", encoding="utf-8") as file:
+        layout = QVBoxLayout()
+        
+        self.label = QLabel("Enter URLs (one per line):")
+        layout.addWidget(self.label)
+        
+        self.url_input = QTextEdit()
+        layout.addWidget(self.url_input)
+        
+        self.output_label = QLabel("Select Output Format:")
+        layout.addWidget(self.output_label)
+        
+        self.format_selector = QComboBox()
+        self.format_selector.addItems(["jsonl", "txt"])
+        layout.addWidget(self.format_selector)
+        
+        self.folder_button = QPushButton("Select Output Folder")
+        self.folder_button.clicked.connect(self.select_folder)
+        layout.addWidget(self.folder_button)
+        
+        self.scrape_button = QPushButton("Start Scraping")
+        self.scrape_button.clicked.connect(self.start_scraping)
+        layout.addWidget(self.scrape_button)
+        
+        self.status_label = QLabel("")
+        layout.addWidget(self.status_label)
+        
+        self.setLayout(layout)
+        self.output_folder = "output"  # Default output folder
+    
+    def select_folder(self):
+        folder = QFileDialog.getExistingDirectory(self, "Select Output Folder")
+        if folder:
+            self.output_folder = os.path.join(folder, "output")  # Create an "output" subfolder in the selected directory
+            self.status_label.setText(f"Output Folder: {self.output_folder}")
+    
+    def start_scraping(self):
+        urls = self.url_input.toPlainText().split('\n')
+        urls = [url.strip() for url in urls if url.strip()]
+        output_format = self.format_selector.currentText()
+        
+        if not urls:
+            self.status_label.setText("Please enter at least one URL.")
+            return
+        
+        output_path = os.path.join(self.output_folder, output_format)
+        os.makedirs(output_path, exist_ok=True)
+        
+        for url in urls:
+            self.scrape_and_process_website(url, output_path, output_format)
+        
+        self.status_label.setText("Scraping completed!")
+    
+    def scrape_and_process_website(self, url, output_path, output_format):
+        response = requests.get(url)
+        soup = BeautifulSoup(response.text, "html.parser")
+        
+        case_num = soup.find("title").get_text().replace('.', '').replace(' ', '_').lower()
+        filename = case_num
+        
+        file_path = os.path.join(output_path, filename)
+        
+        for tag in soup.find_all('a', class_='nt'):
+            tag.insert_after(' ')
+            tag.decompose()
+        
+        result_text = []
+        for tag in soup.find_all():
+            if tag.name == "p" and tag.get("class") == ["b"] and "Footnotes" in tag.text:
+                break
+            if tag.name == "p":
+                result_text.append(tag.get_text(strip=True))
+        
+        final_text = "\n".join(result_text)
+        
+        if output_format == "txt":
+            with open(file_path + ".txt", "w", encoding="utf-8") as file:
+                for line in final_text.split("\n"):
+                    if line.strip():
+                        file.write(line.strip() + "\n")
+        elif output_format == "jsonl":
+            with open(file_path + ".jsonl", "w", encoding="utf-8") as file:
+                for line in final_text.split("\n"):
+                    if line.strip():
+                        json.dump({"text": line.strip()}, file)
+                        file.write("\n")
 
-            for line in final_text.split("\n"):
-                if line.strip():
-                    file.write(line.strip() + "\n")
-            
-    elif output_format == "jsonl":
-        with open(file_path + ".jsonl", "w", encoding="utf-8") as file:
-            for line in final_text.split("\n"):
-                if line.strip():
-                    json.dump({"text": line.strip()}, file)
-                    file.write("\n")
-
-# ADD URLS
-urls = ["https://lawphil.net/judjuris/juri2023/mar2023/gr_198201_2023.html", "https://lawphil.net/judjuris/juri2023/nov2023/gr_241844_2023.html", "https://lawphil.net/judjuris/juri2023/oct2023/am_ca-24-002-p_2023.html","https://lawphil.net/judjuris/juri2023/oct2023/gr_262122_2023.html", "https://lawphil.net/judjuris/juri2023/jan2023/gr_136506_2023.html","https://lawphil.net/judjuris/juri2023/jan2023/gr_258424_2023.html","https://lawphil.net/judjuris/juri2023/aug2023/gr_258060_2023.html", "https://lawphil.net/judjuris/juri2023/aug2023/ac_8367_2023.html", "https://lawphil.net/judjuris/juri2023/apr2023/gr_244027_2023.html", "https://lawphil.net/judjuris/juri2023/apr2023/gr_252790_2023.html", "https://lawphil.net/judjuris/juri2023/jun2023/gr_234614_2023.html", "https://lawphil.net/judjuris/juri2023/nov2023/gr_265272_2023.html", "https://lawphil.net/judjuris/juri2023/nov2023/gr_262889_2023.html", "https://lawphil.net/judjuris/juri2023/nov2023/ac_11026_2023.html", "https://lawphil.net/judjuris/juri2023/jul2023/gr_209479_2023.html"]
-
-# BATCH APPLY
-for url in urls:
-    scrape_and_process_website(url, output_format="jsonl")
-    scrape_and_process_website(url, output_format="txt")
+if __name__ == "__main__":
+    app = QApplication(sys.argv)
+    window = WebScraperGUI()
+    window.show()
+    sys.exit(app.exec())
