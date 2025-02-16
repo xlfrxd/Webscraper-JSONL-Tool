@@ -76,8 +76,6 @@ class WebScraperGUI(QWidget):
         - Removing instances like `.12` where numbers appear after a period.
         - Ensuring proper spacing between inline elements.
         """
-        text = re.sub(r'\s*\d{1,2}(?=[^\w])', '', text)  # Removes inline reference numbers (e.g., "12.")
-        text = re.sub(r'(?<=\w)(\d+)(?=\w)', ' ', text)  # Remove numbers between words
         text = re.sub(r'(?<=\.)\d+', '', text)  # Remove numbers that follow a period (e.g., ".12")
         text = re.sub(r'(?<=\w)([A-Z][a-z]+)', r' \1', text)  # Ensure space between different formatted words
         text = re.sub(r'\s+', ' ', text).strip()  # Remove extra spaces
