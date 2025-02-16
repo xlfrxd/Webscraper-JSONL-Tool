@@ -81,6 +81,7 @@ class WebScraperGUI(QWidget):
         text = re.sub(r'(?<=\.)\d+', '', text)  # Remove numbers that follow a period (e.g., ".12")
         text = re.sub(r'(?<=\w)([A-Z][a-z]+)', r' \1', text)  # Ensure space between different formatted words
         text = re.sub(r'\s+', ' ', text).strip()  # Remove extra spaces
+        text = re.sub(r'\b(January|February|March|April|May|June|July|August|September|October|November|December),\s(\d{1,2})\b', r'\1 \2', text)  # Fix date formatting
         return text
     
     def scrape_and_process_website(self, url, output_path, output_format):
